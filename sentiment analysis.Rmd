@@ -25,7 +25,7 @@ View(nintendo)
 ```
 
 ```{r}
-nintendo <- readRDS("D:/fall 2023/bis 581/assignments/Sentiment Analysis/nintendo.rds")
+nintendo <- readRDS("D:/nintendo.rds")
 ```
 
 
