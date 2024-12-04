@@ -1,0 +1,228 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+# Load the libraries
+
+```{r}
+library(tidytext)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggraph)
+library(igraph)
+library(reshape2)
+library(ggrepel)
+```
+
+# The Ninetendo dataset
+```{r}
+View(nintendo)
+```
+
+```{r}
+nintendo <- readRDS("D:/fall 2023/bis 581/assignments/Sentiment Analysis/nintendo.rds")
+```
+
+
+# Question 1: how many non-English tweets are there?
+```{r}
+non_eng_twt <- filter(nintendo,lang != "en") 
+
+nrow(non_eng_twt)
+```
+# Question 2: what is the ratio of retweets to total tweets?
+```{r}
+
+retweets <- nintendo[grep("^RT",nintendo$msg,ignore.case = FALSE),]
+
+```
+
+```{r}
+nrow(retweets)/nrow(nintendo)
+```
+The ratio of retweets to total tweets 29.904% (~30%)
+
+# Question 3: how many accounts use makebot as their source
+
+```{r}
+
+makebot_acc <- nintendo[grep("makebot",nintendo$source,ignore.case = FALSE),]
+
+```
+
+```{r}
+nrow(makebot_acc)
+```
+
+There are 10 accounts that use makebot as their source
+
+# Question 4: Create a bar graph of most frequent Positive and Negative words (use BING) (10)
+
+
+```{r}
+
+nintendo_rows <- nintendo %>% mutate (h_number = row_number())
+nintendo_tidy <- nintendo_rows %>% unnest_tokens(word, msg)
+
+```
+
+
+* Sentiment word list *
+```{r}
+nintendo_tidy %>% inner_join(get_sentiments("bing")) %>% select(word, sentiment) %>% head(10)
+```
+
+* Positive word list *
+
+```{r}
+nintendo_tidy %>% 
+  inner_join(get_sentiments("bing")) %>% 
+  select(word,sentiment) %>% 
+  filter(sentiment=="positive") %>% 
+  count(word, sort = TRUE) %>% 
+  head(10)
+```
+
+* Negative word list *
+```{r}
+nintendo_tidy %>% 
+  inner_join(get_sentiments("bing")) %>% 
+  select(word,sentiment) %>% 
+  filter(sentiment=="negative") %>% 
+  count(word, sort = TRUE) %>% 
+  head(10)
+```
+
+* Bar graph *
+
+```{r}
+nintendo_tidy %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(word, sentiment, sort = TRUE) %>%
+  group_by(sentiment) %>%
+  slice_head(n = 5) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n),
+         sentiment = factor(sentiment, levels = c("positive", "negative"))) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(position = "dodge", show.legend = TRUE) +
+  scale_fill_manual(values = c("#006400", "#800000")) +  # Adjust colors if needed
+  labs(y = "Word Count", x = "Word") +
+  coord_flip() +
+  ggtitle("Most Frequent Positive and Negative Words") +
+  theme_bw()
+```
+
+
+# Question 5: create a wordcloud of most frequent positive and negative words (10)
+
+# Load Library
+```{r}
+library(wordcloud)
+```
+
+```{r}
+nintendo_tidy %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("#800000", "#006400"),scale=c(4,1), random.order=FALSE, max.words = 50)
+  
+```
+
+# Question 6: create a network diagram (adjust the filter so that individual words are legible. ie: don't have a tangled mess of a plot)
+
+```{r code3, echo=FALSE, message=FALSE, warning=FALSE}
+nintendoBigram <- nintendo_rows %>% unnest_tokens(bigram, msg, token = "ngrams", n = 2)
+```
+
+#code missing
+
+* Removing common words *
+```{r code5, echo=FALSE, message=FALSE, warning=FALSE}
+nintendoBigramCount <- nintendoBigram %>% separate(bigram, c("word1", "word2"), sep = " ") %>%
+        filter(!word1 %in% stop_words$word,
+               !word2 %in% stop_words$word) %>%
+        count(word1, word2, sort = TRUE)
+
+```
+
+
+```{r code6, echo=FALSE, message=FALSE, warning=FALSE}
+
+nintendoBigramCount %>%  filter(n>=10000) %>%
+  graph_from_data_frame() %>% ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n, edge_width = n)) +
+  geom_node_point(color = "#008080", size = 5) +
+  geom_node_text(aes(label = name), vjust = 2.5, size = 5) +
+  labs(title = "Nintendo Network Diagram")
+      theme_minimal()
+```
+
+
+```{r}
+
+#extra codes#
+
+#Random sampling
+samplesize = 0.30 * nrow(nintendo_tidy)
+#this will be a 65/35 split for training/testing data
+set.seed(80)
+index = sample( seq_len ( nrow ( nintendo_tidy ) ), size = samplesize )
+```
+
+```{r}
+# Create training and test set
+datatrain = nintendo_tidy[ index, ]
+datatest = nintendo_tidy[ -index, ]
+```
+
+```{r}
+## Fit neural network 
+
+# load library
+library(neuralnet)
+
+# creating training and test set
+trainNN = nintendo_tidy[index , ]
+testNN = nintendo_tidy[-index , ]
+# Create a smaller training set for testing
+trainNN_small <- trainNN[1:100, ]  # Adjust the size based on your data
+
+```
+
+```{r}
+# Assuming 'word' is your predictor, 'lang' and 'hashtags' are your input features
+  formula <- as.formula("word ~ lang + hashtags")
+
+# Set seed for reproducibility
+set.seed(2)
+
+# Load necessary library
+library(neuralnet)
+
+# Sample data
+nintendo_tidy <- data.frame(
+  word = rnorm(100),
+  lang = rnorm(100),
+  hashtags = rnorm(100)
+)
+
+# Create a smaller training set for testing
+trainNN_small <- nintendo_tidy[1:20, ]  # Adjust the size based on your data
+
+# Fit neural network
+NN <- neuralnet(formula, data = trainNN_small, hidden = 4, linear.output = TRUE)
+
+# Plot neural network
+# Adjust the parameters for better visualization
+plot(NN) #,rep = "best", cex = 0.7)
+
+```
+
+
